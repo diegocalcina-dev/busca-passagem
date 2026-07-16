@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Settings as SettingsIcon, Bell, Database, Radio, AlertTriangle, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings as SettingsIcon, Bell, Database, Radio, AlertTriangle, Save, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { getIntegrationsStatus, IntegrationsStatus } from '../api/client'
 
 interface SettingsSectionProps {
   title: string
@@ -148,8 +149,40 @@ function Toggle({
   )
 }
 
+function formatRelative(iso: string | null): string {
+  if (!iso) return '—'
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `há ${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `há ${hrs}h`
+  return `há ${Math.floor(hrs / 24)}d`
+}
+
+function formatNext(iso: string | null): string {
+  if (!iso) return '—'
+  const diff = new Date(iso).getTime() - Date.now()
+  if (diff <= 0) return 'em breve'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `em ${mins} min`
+  return `em ${Math.floor(mins / 60)}h${mins % 60 > 0 ? String(mins % 60).padStart(2, '0') + 'min' : ''}`
+}
+
 export default function Settings() {
   const [saved, setSaved] = useState(false)
+  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null)
+  const [loadingInt, setLoadingInt] = useState(true)
+
+  const fetchIntegrations = () => {
+    setLoadingInt(true)
+    getIntegrationsStatus()
+      .then(setIntegrations)
+      .catch(() => {})
+      .finally(() => setLoadingInt(false))
+  }
+
+  useEffect(() => { fetchIntegrations() }, [])
 
   const [promoThreshold, setPromoThreshold] = useState(40)
   const [baselineWindow, setBaselineWindow] = useState('90')
@@ -161,8 +194,15 @@ export default function Settings() {
   const [smtpEmail, setSmtpEmail] = useState('')
   const [alertEmail, setAlertEmail] = useState('')
 
-  const [strategyA1, setStrategyA1] = useState(false)
+  const [strategyA1, setStrategyA1] = useState(() =>
+    localStorage.getItem('strategy_a1') !== 'false'
+  )
   const [strategyA2, setStrategyA2] = useState(false)
+
+  const handleToggleA1 = (v: boolean) => {
+    setStrategyA1(v)
+    localStorage.setItem('strategy_a1', String(v))
+  }
 
   const handleSave = () => {
     setSaved(true)
@@ -283,36 +323,99 @@ export default function Settings() {
       </Section>
 
       {/* Data */}
-      <Section title="Dados e Integracao" icon={<Database className="w-4 h-4" />}>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between p-3 bg-bg-base rounded-lg border border-bg-border">
-            <div>
-              <p className="text-sm text-gray-300 font-medium">Travelpayouts API</p>
-              <p className="text-xs text-gray-600">Fonte principal de dados</p>
+      <Section title="Dados e Integração" icon={<Database className="w-4 h-4" />}>
+        {/* Header com refresh */}
+        <div className="flex items-center justify-between -mt-1">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Fontes de dados</p>
+          <button
+            onClick={fetchIntegrations}
+            disabled={loadingInt}
+            className="text-gray-600 hover:text-gray-300 transition-colors disabled:opacity-40"
+            title="Atualizar"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingInt ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Providers */}
+        <div className="flex flex-col gap-2">
+          {integrations && Object.values(integrations.providers).map(p => (
+            <div key={p.label} className="flex items-center justify-between p-3 bg-bg-base rounded-lg border border-bg-border">
+              <div>
+                <p className="text-sm text-gray-300 font-medium">{p.label}</p>
+                <p className="text-xs text-gray-600">{p.description}</p>
+                {p.configured && p.observations > 0 && (
+                  <p className="text-xs text-gray-500 mt-0.5">{p.observations.toLocaleString('pt-BR')} observações coletadas</p>
+                )}
+              </div>
+              {p.configured ? (
+                <div className="flex items-center gap-1.5 text-green-400 shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-xs font-semibold">Ativo</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-gray-600 shrink-0">
+                  <XCircle className="w-4 h-4" />
+                  <span className="text-xs font-semibold">Não configurado</span>
+                </div>
+              )}
             </div>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 font-medium">
-              Nao configurado
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-bg-base rounded-lg border border-bg-border">
-            <div>
-              <p className="text-sm text-gray-300 font-medium">RapidAPI</p>
-              <p className="text-xs text-gray-600">Verificacao de precos ao vivo</p>
-            </div>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 font-medium">
-              Nao configurado
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-bg-base rounded-lg border border-bg-border">
-            <div>
-              <p className="text-sm text-gray-300 font-medium">Dados Mock</p>
-              <p className="text-xs text-gray-600">Modo de demonstracao ativo</p>
-            </div>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-medium">
-              Ativo
-            </span>
+          ))}
+        </div>
+
+        {/* Alerts */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Canais de alerta</p>
+          <div className="flex flex-col gap-2">
+            {integrations && Object.values(integrations.alerts).map(a => (
+              <div key={a.label} className="flex items-center justify-between p-3 bg-bg-base rounded-lg border border-bg-border">
+                <p className="text-sm text-gray-300 font-medium">{a.label}</p>
+                {a.configured ? (
+                  <div className="flex items-center gap-1.5 text-green-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-xs font-semibold">Ativo</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <XCircle className="w-4 h-4" />
+                    <span className="text-xs font-semibold">Não configurado</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* DB stats */}
+        {integrations && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Banco de dados</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-bg-base rounded-lg border border-bg-border">
+                <p className="text-xs text-gray-500 mb-0.5">Observações reais</p>
+                <p className="text-lg font-bold text-white">{integrations.database.real_observations.toLocaleString('pt-BR')}</p>
+              </div>
+              <div className="p-3 bg-bg-base rounded-lg border border-bg-border">
+                <p className="text-xs text-gray-500 mb-0.5">Total no banco</p>
+                <p className="text-lg font-bold text-white">{integrations.database.total_observations.toLocaleString('pt-BR')}</p>
+              </div>
+              <div className="p-3 bg-bg-base rounded-lg border border-bg-border">
+                <p className="text-xs text-gray-500 mb-0.5">Última coleta</p>
+                <p className="text-sm font-semibold text-gray-300">{formatRelative(integrations.database.last_collection)}</p>
+              </div>
+              <div className="p-3 bg-bg-base rounded-lg border border-bg-border">
+                <p className="text-xs text-gray-500 mb-0.5">Próxima coleta</p>
+                <p className="text-sm font-semibold text-gray-300">{formatNext(integrations.database.next_collection)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {loadingInt && !integrations && (
+          <div className="flex justify-center py-4">
+            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
       </Section>
 
       {/* Advanced */}
@@ -326,14 +429,14 @@ export default function Settings() {
 
         <Toggle
           label="Estrategia A1 — Deteccao de Tarifa com Erro"
-          description="Detecta precos &gt;60% abaixo da mediana como possiveis erros tarifarios"
+          description="Exibe oportunidades classificadas como tarifa com erro (>60% abaixo da mediana). Desative se quiser ver apenas promocoes normais."
           checked={strategyA1}
-          onChange={setStrategyA1}
+          onChange={handleToggleA1}
         />
 
         <Toggle
-          label="Estrategia A2 — Monitoramento de Disponibilidade"
-          description="Verifica disponibilidade em tempo real antes de alertar (requer API key)"
+          label="Estrategia A2 — Verificacao Cruzada"
+          description="Cruza dados Travelpayouts + Kiwi antes de marcar como oportunidade confirmada"
           checked={strategyA2}
           onChange={setStrategyA2}
         />
@@ -341,7 +444,7 @@ export default function Settings() {
 
       {/* Info */}
       <p className="text-xs text-gray-600 text-center pb-4">
-        Versao 0.1.0 — CacaPassagem • Dados mock ativos para demonstracao
+        Versão 0.3.0 — Caça Passagem da Dani
       </p>
     </div>
   )

@@ -8,6 +8,7 @@ export default function Watchlist() {
   const [targets, setTargets] = useState<Target[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editingTarget, setEditingTarget] = useState<Target | null>(null)
 
   useEffect(() => {
     getTargets()
@@ -15,8 +16,13 @@ export default function Watchlist() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCreated = (target: Target) => {
-    setTargets(prev => [target, ...prev])
+  const handleSaved = (target: Target) => {
+    setTargets(prev => {
+      const exists = prev.some(t => t.id === target.id)
+      return exists
+        ? prev.map(t => (t.id === target.id ? target : t))
+        : [target, ...prev]
+    })
   }
 
   const handleUpdate = (updated: Target) => {
@@ -82,6 +88,7 @@ export default function Watchlist() {
                     target={t}
                     onUpdate={handleUpdate}
                     onDelete={handleDelete}
+                    onEdit={() => setEditingTarget(t)}
                   />
                 ))}
               </div>
@@ -100,6 +107,7 @@ export default function Watchlist() {
                     target={t}
                     onUpdate={handleUpdate}
                     onDelete={handleDelete}
+                    onEdit={() => setEditingTarget(t)}
                   />
                 ))}
               </div>
@@ -109,7 +117,18 @@ export default function Watchlist() {
       )}
 
       {showModal && (
-        <AddTargetModal onClose={() => setShowModal(false)} onCreated={handleCreated} />
+        <AddTargetModal
+          onClose={() => setShowModal(false)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {editingTarget && (
+        <AddTargetModal
+          onClose={() => setEditingTarget(null)}
+          onSaved={t => { handleSaved(t); setEditingTarget(null) }}
+          initialTarget={editingTarget}
+        />
       )}
     </div>
   )

@@ -154,3 +154,29 @@ export const getObservations = (targetId?: number) =>
       params: targetId ? { target_id: targetId } : {},
     })
     .then(r => r.data)
+
+// ─── Integrations ─────────────────────────────────────────────────────────────
+
+export interface IntegrationsStatus {
+  providers: {
+    travelpayouts: { label: string; description: string; configured: boolean; observations: number }
+    kiwi:          { label: string; description: string; configured: boolean; observations: number }
+  }
+  alerts: {
+    telegram: { label: string; configured: boolean }
+    email:    { label: string; configured: boolean }
+  }
+  database: {
+    total_observations: number
+    mock_observations: number
+    real_observations: number
+    last_collection: string | null
+    next_collection: string | null
+  }
+}
+
+export const getIntegrationsStatus = () =>
+  api.get<IntegrationsStatus>('/api/integrations').then(r => r.data)
+
+export const triggerVerify = () =>
+  api.post('/api/verify').then(r => r.data)

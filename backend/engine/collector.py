@@ -14,13 +14,15 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Target, PriceObservation
 from providers.travelpayouts import TravelpayoutsProvider
+from providers.kiwi import KiwiProvider
 from providers.base import FlightResult
 from engine.detector import recalculate_baseline, detect_opportunities
+from engine.verifier import verify_opportunities
 
 logger = logging.getLogger("collector")
 
 # Registre novos providers aqui
-PROVIDERS = [TravelpayoutsProvider()]
+PROVIDERS = [TravelpayoutsProvider(), KiwiProvider()]
 
 
 def _save_observations(db: Session, flights: List[FlightResult], target: Target) -> List[PriceObservation]:
@@ -120,8 +122,8 @@ def run_collection_cycle() -> dict:
 
         summary["observations_saved"] = len(all_new_obs)
 
-        # Recalcular baselines para rotas com novas observações
-        route_keys = {f"{o.origin}-{o.destination}-{o.cabin}" for o in all_new_obs}
+        # Recalcular baselines para rotas com novas observações (inclui moeda)
+        route_keys = {f"{o.origin}-{o.destination}-{o.cabin}-{o.currency}" for o in all_new_obs}
         for rk in route_keys:
             recalculate_baseline(db, rk)
 
@@ -131,6 +133,12 @@ def run_collection_cycle() -> dict:
 
         if new_opps:
             logger.info(f"[collector] {len(new_opps)} oportunidade(s) detectada(s)")
+            # Verificar via Travelpayouts /latest (gratuito, sem cota)
+            new_ids = [o.id for o in new_opps]
+            verify_result = verify_opportunities(opportunity_ids=new_ids)
+            if not verify_result.get("skipped"):
+                summary["verified"] = verify_result.get("verified", 0)
+                summary["confirmed_live"] = verify_result.get("confirmed", 0)
 
     except Exception as e:
         msg = f"cycle error: {e}"

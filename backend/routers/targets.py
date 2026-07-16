@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
-from models import Target
+from models import Target, PriceObservation, Opportunity
 from schemas import TargetCreate, TargetUpdate, TargetResponse
 
 router = APIRouter(prefix="/api/targets", tags=["targets"])
@@ -62,6 +62,13 @@ def delete_target(target_id: int, db: Session = Depends(get_db)):
     target = db.query(Target).filter(Target.id == target_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
+
+    # Cascade manual: oportunidades → observações → target
+    obs_ids = [o.id for o in db.query(PriceObservation.id).filter(PriceObservation.target_id == target_id).all()]
+    if obs_ids:
+        db.query(Opportunity).filter(Opportunity.observation_id.in_(obs_ids)).delete(synchronize_session=False)
+    db.query(Opportunity).filter(Opportunity.target_id == target_id).delete(synchronize_session=False)
+    db.query(PriceObservation).filter(PriceObservation.target_id == target_id).delete(synchronize_session=False)
     db.delete(target)
     db.commit()
 

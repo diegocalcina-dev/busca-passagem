@@ -8,7 +8,7 @@ import {
   Radio,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getOpportunities } from '../api/client'
+import { getOpportunities, getDashboardStats } from '../api/client'
 
 const NAV_ITEMS = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,10 +19,15 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const [oppCount, setOppCount] = useState<number>(0)
+  const [activeRoutes, setActiveRoutes] = useState<number | null>(null)
 
   useEffect(() => {
     getOpportunities({ dismissed: false })
       .then(data => setOppCount(data.filter(o => o.expiry_status !== 'expired').length))
+      .catch(() => {})
+
+    getDashboardStats()
+      .then(stats => setActiveRoutes(stats.total_targets))
       .catch(() => {})
   }, [])
 
@@ -70,7 +75,9 @@ export default function Sidebar() {
           <Radio className="w-3.5 h-3.5 text-green-400" />
           <span className="text-xs font-semibold text-green-400">Monitorando</span>
         </div>
-        <p className="text-xs text-gray-500">6 rotas ativas</p>
+        <p className="text-xs text-gray-500">
+          {activeRoutes === null ? '...' : `${activeRoutes} ${activeRoutes === 1 ? 'rota ativa' : 'rotas ativas'}`}
+        </p>
         <p className="text-xs text-gray-600 mt-0.5">Ultima coleta: agora</p>
       </div>
     </aside>

@@ -1,4 +1,4 @@
-import { ExternalLink, CheckCircle, AlertTriangle, Clock, ShieldAlert } from 'lucide-react'
+import { ExternalLink, CheckCircle, Database, Clock, ShieldAlert } from 'lucide-react'
 import { Opportunity, dismissOpportunity } from '../api/client'
 import StrengthBadge from './StrengthBadge'
 import { useState } from 'react'
@@ -105,9 +105,9 @@ export default function OpportunityCard({ opportunity: opp, onDismiss }: Props) 
             Confirmado ao vivo
           </span>
         ) : (
-          <span className="flex items-center gap-1 text-yellow-500">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            Apenas cache
+          <span className="flex items-center gap-1 text-gray-500">
+            <Database className="w-3.5 h-3.5" />
+            Travelpayouts
           </span>
         )}
         <span className="text-bg-border">|</span>

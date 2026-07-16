@@ -160,6 +160,51 @@ class TravelpayoutsProvider(PriceProvider):
             ))
         return results
 
+    def verify_route(
+        self,
+        origin: str,
+        destination: str,
+        opportunity_price: float,
+        currency: str = "BRL",
+        tolerance_pct: float = 20.0,
+    ) -> dict:
+        """
+        Verifica se uma oportunidade ainda é válida usando /aviasales/v3/prices_for_dates.
+        Retorna dict com: confirmed (bool), best_price (float|None), error (str|None).
+        """
+        if not self.is_available():
+            return {"confirmed": False, "best_price": None, "error": "not_configured"}
+        try:
+            r = httpx.get(
+                f"{BASE_URL}/aviasales/v3/prices_for_dates",
+                params={
+                    "origin": origin,
+                    "destination": destination,
+                    "currency": currency.lower(),
+                    "token": self.token,
+                },
+                timeout=15,
+            )
+            r.raise_for_status()
+            entries = r.json().get("data", [])
+        except Exception as e:
+            return {"confirmed": False, "best_price": None, "error": str(e)}
+
+        if not entries:
+            return {"confirmed": False, "best_price": None, "error": "no_results"}
+
+        prices = [float(e.get("price", 0)) for e in entries if e.get("price")]
+        if not prices:
+            return {"confirmed": False, "best_price": None, "error": "no_prices"}
+
+        threshold = opportunity_price * (1 + tolerance_pct / 100)
+        best = min(prices)
+        return {
+            "confirmed": best <= threshold,
+            "best_price": best,
+            "error": None,
+        }
+
     def fetch_months_in_range(
         self,
         origin: str,

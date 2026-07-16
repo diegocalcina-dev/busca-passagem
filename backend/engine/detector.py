@@ -36,11 +36,13 @@ def classify_strength(pct_below: float) -> Optional[str]:
 
 
 def recalculate_baseline(db: Session, route_key: str) -> Optional[Baseline]:
-    """Recalcula mediana, P25, P10 e mínimo para uma rota."""
-    parts = route_key.split("-", 2)
-    if len(parts) != 3:
+    """Recalcula mediana, P25, P10 e mínimo para uma rota.
+    route_key: "GRU-LIS-economy-BRL"
+    """
+    parts = route_key.split("-", 3)
+    if len(parts) != 4:
         return None
-    origin, destination, cabin = parts
+    origin, destination, cabin, currency = parts
 
     since = datetime.utcnow() - timedelta(days=BASELINE_WINDOW_DAYS)
     prices = [
@@ -50,6 +52,7 @@ def recalculate_baseline(db: Session, route_key: str) -> Optional[Baseline]:
             PriceObservation.origin == origin,
             PriceObservation.destination == destination,
             PriceObservation.cabin == cabin,
+            PriceObservation.currency == currency,
             PriceObservation.collected_at >= since,
             PriceObservation.price > 0,
         )
@@ -90,17 +93,22 @@ def _make_search_link(origin: str, destination: str, departure_at: str) -> str:
 
 
 def detect_opportunities(db: Session, observations: List[PriceObservation]) -> List[Opportunity]:
-    """Compara observações contra baseline e cria oportunidades quando há anomalia."""
+    """Compara observações contra baseline e cria oportunidades quando há anomalia.
+    Deduplica por (origin, destination, cabin, currency, price, departure_date).
+    Só compara preços na mesma moeda do baseline.
+    """
     new_opps = []
+    baseline_cache: dict = {}
 
-    # Cache baselines to avoid redundant DB queries
-    baseline_cache: dict[str, Optional[Baseline]] = {}
+    # Conjunto de combinações já registradas nesta sessão para evitar duplicatas em batch
+    seen: set = set()
 
     for obs in observations:
         if obs.price <= 0:
             continue
 
-        route_key = f"{obs.origin}-{obs.destination}-{obs.cabin}"
+        # route_key inclui moeda para não misturar BRL com EUR
+        route_key = f"{obs.origin}-{obs.destination}-{obs.cabin}-{obs.currency}"
         if route_key not in baseline_cache:
             baseline_cache[route_key] = (
                 db.query(Baseline).filter(Baseline.route_key == route_key).first()
@@ -115,8 +123,27 @@ def detect_opportunities(db: Session, observations: List[PriceObservation]) -> L
         if not strength:
             continue
 
-        # Skip if this observation already has an opportunity
+        # Dedup por observation_id
         if db.query(Opportunity).filter(Opportunity.observation_id == obs.id).first():
+            continue
+
+        # Dedup em batch: mesma rota + preço + data de partida
+        dedup_key = (obs.origin, obs.destination, obs.cabin, obs.currency,
+                     round(obs.price), obs.departure_at[:10])
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+
+        # Dedup no banco: já existe oportunidade ativa com mesmo preço e data?
+        existing = db.query(Opportunity).filter(
+            Opportunity.origin == obs.origin,
+            Opportunity.destination == obs.destination,
+            Opportunity.cabin == obs.cabin,
+            Opportunity.currency == obs.currency,
+            Opportunity.price == obs.price,
+            Opportunity.is_dismissed == False,
+        ).first()
+        if existing:
             continue
 
         buy_link = getattr(obs, "buy_link", None) or _make_search_link(

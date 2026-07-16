@@ -13,6 +13,7 @@ from routers import targets, opportunities, observations
 import seed_data
 from engine.scheduler import start_scheduler, stop_scheduler, get_next_run
 from engine.collector import run_collection_cycle
+from engine.verifier import verify_opportunities
 
 
 def _migrate(db: Session):
@@ -130,6 +131,73 @@ def collection_status():
     return {
         "scheduler_running": True,
         "next_run": get_next_run(),
+    }
+
+
+# ─── Verificação ao vivo ──────────────────────────────────────────────────────
+
+@app.post("/api/verify")
+def trigger_verify(background_tasks: BackgroundTasks):
+    """Verifica oportunidades pendentes via Travelpayouts /latest (gratuito)."""
+    background_tasks.add_task(verify_opportunities)
+    return {"status": "running", "started_at": datetime.utcnow().isoformat()}
+
+
+# ─── Integrations status ──────────────────────────────────────────────────────
+
+@app.get("/api/integrations")
+def integrations_status(db: Session = Depends(get_db)):
+    import os
+    from models import PriceObservation
+    from sqlalchemy import func
+
+    # Contagens por fonte
+    counts = dict(
+        db.query(PriceObservation.source, func.count(PriceObservation.id))
+        .group_by(PriceObservation.source)
+        .all()
+    )
+
+    # Última coleta real
+    last_real = (
+        db.query(PriceObservation.collected_at)
+        .filter(PriceObservation.source != "mock")
+        .order_by(PriceObservation.collected_at.desc())
+        .first()
+    )
+
+    return {
+        "providers": {
+            "travelpayouts": {
+                "label": "Travelpayouts API",
+                "description": "Fonte principal — dados Aviasales + verificação via /latest",
+                "configured": bool(os.getenv("TRAVELPAYOUTS_TOKEN")),
+                "observations": counts.get("travelpayouts", 0),
+            },
+            "kiwi": {
+                "label": "Kiwi Tequila API",
+                "description": "Segunda fonte — fares ao vivo, self-transfer, destinos globais",
+                "configured": bool(os.getenv("KIWI_API_KEY")),
+                "observations": counts.get("kiwi", 0),
+            },
+        },
+        "alerts": {
+            "telegram": {
+                "label": "Telegram",
+                "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN")),
+            },
+            "email": {
+                "label": "E-mail (Gmail)",
+                "configured": bool(os.getenv("SMTP_USER")),
+            },
+        },
+        "database": {
+            "total_observations": sum(counts.values()),
+            "mock_observations": counts.get("mock", 0),
+            "real_observations": sum(v for k, v in counts.items() if k != "mock"),
+            "last_collection": last_real[0].isoformat() if last_real else None,
+            "next_collection": get_next_run(),
+        },
     }
 
 
