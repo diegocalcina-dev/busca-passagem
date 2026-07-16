@@ -2,12 +2,12 @@
 
 | Campo | Valor |
 |---|---|
-| **Produto** | Caçador de Passagens — app pessoal de detecção de promoções e *mistake fares* |
-| **Versão** | 1.0 (Draft) |
-| **Data** | 15/07/2026 |
-| **Autor** | `[SEU NOME]` |
+| **Produto** | Caça Passagem da Dani — app pessoal de detecção de promoções e *mistake fares* |
+| **Versão** | 0.3.0 (Em desenvolvimento) |
+| **Data** | 16/07/2026 |
+| **Autor** | Dani / Diego |
 | **Tipo de usuário** | Single-user (uso pessoal) |
-| **Status** | Em especificação |
+| **Status** | MVP funcional — coleta real, detecção ativa, interface completa |
 
 ---
 
@@ -129,13 +129,15 @@ A cobertura máxima vem de **aplicar as dimensões viáveis a cada fonte dispon�
 
 ### 7.1 Fontes priorizadas
 
-| Prioridade | Fonte | Tipo de dado | Autenticação | Custo | Papel no produto | Limitação-chave |
+> **Decisão de implementação (jul/2026):** toda a stack é 100% gratuita. RapidAPI foi avaliado e descartado (cota de 50 req/mês esgotada, plano pago não justifica). Verificação ao vivo feita pelo próprio Travelpayouts.
+
+| Prioridade | Fonte | Tipo de dado | Autenticação | Custo | Papel no produto | Status |
 |---|---|---|---|---|---|---|
-| **Primária** | **Travelpayouts Data API (dados Aviasales)** | **Cache** (histórico de buscas, ~7 dias) | Token no header `X-Access-Token` (cadastro no programa de afiliados) | Grátis (modelo de afiliado) | Descoberta ampla (D2, D3, D9) + geração do **baseline** de preço | Dados em cache, não ao vivo → exigem re-verificação |
-| **Secundária** | **API de busca de voos via RapidAPI** (agregador com tier grátis) | Semi-ao-vivo | Chave RapidAPI | Tier grátis + planos | **Re-verificar** candidatos e ampliar cobertura | Cotas do tier grátis; provedor configurável |
-| Opcional | **Duffel** (modo de teste) | Busca real (sandbox no teste) | API key | Teste grátis; produção sob setup | Busca real e, no futuro, fluxo de compra | Dados de teste não são de produção |
-| Opcional | **Kiwi.com Tequila** (tier de teste) | Busca com **virtual interlining** | API key | Teste grátis; produção gated por parceria | Roteiros criativos (D12) e hidden-city (A1) | Acesso de produção restrito |
-| Opcional | **SerpApi — Google Flights** | Dados do Google Flights | API key | Pago (com trial) | Verificação de alta qualidade | Custo por consulta |
+| **Primária** | **Travelpayouts Data API (dados Aviasales)** | Cache (~48h) + `/aviasales/v3/prices_for_dates` | Token `X-Access-Token` (afiliados) | **Grátis** | Coleta (D1, D2, D3) + baseline + **re-verificação** de oportunidades | ✅ Implementado |
+| **Secundária** | **Kiwi.com Tequila API** | Fares ao vivo, virtual interlining | `apikey` header (cadastro gratuito) | **Grátis** | Segunda fonte de coleta; cobre self-transfer e roteiros criativos (D12) | ⏳ Código pronto — aguarda chave |
+| Descartado | ~~RapidAPI / Sky-Scrapper~~ | Semi-ao-vivo | Chave RapidAPI | Pago (cota grátis: 50 req/mês) | Substituído por Travelpayouts `/prices_for_dates` | ❌ Removido |
+| Opcional futura | **Duffel** | Busca real (sandbox) | API key | Teste grátis | Verificação de alta qualidade / fluxo de compra | Não iniciado |
+| Opcional futura | **SerpApi — Google Flights** | Dados Google Flights | API key | Pago | Verificação premium | Não iniciado |
 
 ### 7.2 Requisitos de integração
 - **RF-INT-1.** Cada fonte é implementada atrás de uma **interface comum `PriceProvider`** (ligar/desligar por configuração).
@@ -287,25 +289,28 @@ alerts             (id, opportunity_id, channel, sent_at, cooldown_until)
 
 ## 15. Roadmap por fases
 
-| Fase | Entrega |
-|---|---|
-| **MVP** | Watchlist básica (D1, D2, D5), fonte primária (Travelpayouts), baseline + regra de %, alerta por Telegram, store SQLite. |
-| **v1** | Dimensões D3, D4, D7, D9, D10; fonte secundária (RapidAPI) para verificação ao vivo; classificação de força; dashboard com gráfico; cooldown/dedup. |
-| **v1.5** | Varredura de descoberta (D3 automática), priorização inteligente, exportação CSV, e-mail como canal alternativo. |
-| **v2** | Fontes opcionais (Duffel/Kiwi/SerpApi), D12 (virtual interlining), estratégias avançadas A1/A2 com avisos, price-per-km e velocidade de queda. |
+| Fase | Entrega | Status |
+|---|---|---|
+| **MVP** | Watchlist (D1, D2, D5), Travelpayouts, baseline + regra de %, store SQLite | ✅ Completo |
+| **v0.2** | D3 (destino ANY), D7 (cabines), D10 (moedas); motor de detecção; APScheduler; dashboard; edição de rotas | ✅ Completo |
+| **v0.3** | Verificação gratuita via Travelpayouts `/prices_for_dates`; Kiwi como 2ª fonte; edição completa de rotas; Estratégia A1 funcional (localStorage) | ✅ Completo (16/07/2026) |
+| **v0.4** | Alertas por e-mail (SMTP/Gmail) com link de compra; auto-expirar oportunidades antigas | 🔜 Próximo |
+| **v1.0** | Kiwi ativado (chave configurada); D12 virtual interlining; dashboard com gráfico de tendência de preço por rota | Planejado |
+| **v1.5** | Varredura de descoberta D3 automática; priorização inteligente; exportação CSV | Planejado |
+| **v2.0** | Estratégia A2; price-per-km e velocidade de queda como sinal de anomalia | Futuro |
 
 ---
 
 ## 16. Critérios de aceitação (amostra testável)
-- [ ] Dado um alvo com datas flexíveis, o sistema coleta e grava preços para cada dia da janela.
-- [ ] O baseline é recalculado por rota e usa mediana + percentis.
-- [ ] Um preço ≥ 40% abaixo do baseline gera um candidato.
-- [ ] Todo candidato é re-verificado ao vivo antes de virar alerta.
-- [ ] O alerta chega no canal configurado com rota, datas, preço, % abaixo do normal, cia, validade e **link de compra**.
-- [ ] Não há alertas duplicados para a mesma combinação dentro do cooldown.
-- [ ] A falha de uma fonte não interrompe o ciclo.
-- [ ] Rate limits são respeitados e há cache + backoff.
-- [ ] Estratégias A1/A2 só operam com opt-in e sempre exibem os avisos de risco.
+- [x] Dado um alvo com datas flexíveis, o sistema coleta e grava preços para cada dia da janela.
+- [x] O baseline é recalculado por rota e usa mediana + percentis.
+- [x] Um preço ≥ 40% abaixo do baseline gera um candidato.
+- [x] Todo candidato é re-verificado (via Travelpayouts `/prices_for_dates`) — confirmado ao vivo ou marcado como expirado.
+- [ ] O alerta chega no canal configurado com rota, datas, preço, % abaixo do normal, cia, validade e **link de compra**. *(e-mail pendente)*
+- [x] Não há alertas duplicados para a mesma combinação (dedup por route+price+departure).
+- [x] A falha de uma fonte não interrompe o ciclo.
+- [x] Rate limits respeitados; cache por rota no ciclo de verificação.
+- [x] Estratégia A1 opera com opt-in (toggle em Configurações) e exibe aviso quando desativada.
 
 ---
 
@@ -322,16 +327,18 @@ alerts             (id, opportunity_id, channel, sent_at, cooldown_until)
 
 ---
 
-## 18. Decisões pendentes (a preencher pelo usuário)
-- Aeroporto(s) de origem principal: `[ex.: GRU, GIG]`
-- Moeda base: `[BRL]`
-- Rotas/destinos de interesse iniciais: `[lista]`
-- Limiar de promoção padrão: `[ex.: 40%]`
-- Tetos absolutos por rota (opcional): `[ex.: GRU→LIS < R$ 2.000]`
-- Canal de alerta preferido: `[Telegram / e-mail]`
-- Frequência de coleta: `[ex.: 6h]`
-- Ativar estratégias avançadas A1/A2? `[não por padrão]`
-- Onde rodar/deploy: `[VPS pequena / Railway / Render / GitHub Actions agendado]`
+## 18. Decisões tomadas
+
+- **Aeroportos de origem:** GRU (principal), CGH, GIG, VCP, BSB e outros conforme watchlist
+- **Moeda base:** BRL (+ USD, EUR opcionais por rota)
+- **Rotas de interesse:** GRU→REC, GRU→GIG, GRU→LIS e outras conforme watchlist da Dani
+- **Limiar de promoção:** 40% abaixo do baseline (configurável)
+- **Tetos absolutos:** configuráveis por rota via campo `price_ceiling` no cadastro
+- **Canal de alerta:** e-mail (Gmail/SMTP) — Telegram descartado (Dani não usa); WhatsApp descartado (API paga/ToS)
+- **Frequência de coleta:** a cada 6h (APScheduler)
+- **Estratégias avançadas:** A1 (mistake fare) ativo por padrão, desligável via toggle; A2 ainda não implementada
+- **Deploy:** local (Mac da Dani) por enquanto; Railway/Render considerados para v1.0
+- **Custo:** zero — stack 100% gratuita (Travelpayouts + Kiwi)
 
 ---
 
