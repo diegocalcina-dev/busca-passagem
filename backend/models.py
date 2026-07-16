@@ -45,6 +45,7 @@ class PriceObservation(Base):
     source = Column(String, default="mock")
     expires_at = Column(String, nullable=True)
     price_per_km = Column(Float, nullable=True)
+    buy_link = Column(Text, nullable=True)
     collected_at = Column(DateTime, default=datetime.utcnow)
 
     target = relationship("Target", back_populates="observations")

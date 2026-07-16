@@ -34,8 +34,8 @@ export default function Sidebar() {
           <Plane className="w-4 h-4 text-white" />
         </div>
         <div>
-          <p className="text-sm font-bold text-white leading-tight">Caca</p>
-          <p className="text-sm font-bold text-accent-light leading-tight">Passagem</p>
+          <p className="text-sm font-bold text-white leading-tight">Caça Passagem</p>
+          <p className="text-xs font-medium text-accent-light leading-tight">da Dani</p>
         </div>
       </div>
 

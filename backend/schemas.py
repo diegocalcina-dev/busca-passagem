@@ -131,6 +131,17 @@ class OpportunityResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─── Collection schemas ───────────────────────────────────────────────────────
+
+class CollectionResult(BaseModel):
+    started_at: str
+    sources_used: List[str]
+    observations_saved: int
+    opportunities_detected: int
+    errors: List[str]
+    status: str = "done"
+
+
 # ─── Dashboard schemas ────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
